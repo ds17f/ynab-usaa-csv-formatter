@@ -43,7 +43,7 @@ def _transform_usaa_to_ynab(usaa_data: List[USAA_ROW]) -> List[YNAB_ROW]:
             Category="",
             Memo="",
             Outflow="",
-            Inflow=float(usaa_row.amount),
+            Inflow=float(usaa_row.amount.replace("--", "")),
         )
         LOGGER.debug(f"YNAB ROW: {ynab_row}")
         ynab_rows.append(ynab_row)
@@ -54,7 +54,7 @@ def _transform_usaa_to_ynab(usaa_data: List[USAA_ROW]) -> List[YNAB_ROW]:
 
 def _write_ynab_file_out(ynab_data: List[YNAB_ROW], file_path: str) -> str:
     """Writes the file to a temp location and returns the filename"""
-    temp_file = "./TMP_FILE.csv" #TODO: use a legit python temp file
+    temp_file = file_path #"./TMP_FILE.csv" #TODO: use a legit python temp file
     with open(temp_file, 'w', newline='') as csvfile:
         csv_writer = writer(csvfile)
         # write the headers
