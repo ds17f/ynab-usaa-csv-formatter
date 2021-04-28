@@ -1,0 +1,1 @@
+# ynab-usaa-csv-formatter
