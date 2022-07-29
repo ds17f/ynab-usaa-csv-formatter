@@ -5,7 +5,7 @@ import logging
 LOGGER = logging.getLogger(__name__)
 
 USAA_ROW_FIELDS = [
-    "cleared", "blank", "date", "blank1", "memo", "category", "amount"
+    "Date", "Description", "OriginalDescription", "Category", "Amount", "Status"
 ]
 YNAB_ROW_FIELDS = [
     "Date", "Payee" , "Category" , "Memo" , "Outflow" , "Inflow"
@@ -13,17 +13,25 @@ YNAB_ROW_FIELDS = [
 USAA_ROW = namedtuple('USAA_ROW', USAA_ROW_FIELDS)
 YNAB_ROW = namedtuple('YNAB_ROW', YNAB_ROW_FIELDS)
 
-def _read_file(csv_filename: str) -> List[USAA_ROW]:
+def _read_file(csv_filename: str, skip_rows: int = 0) -> List[USAA_ROW]:
     """Reads the rows of the CSV file and returns a list of those rows"""
+    skipped_rows = 0
     rows = []
     LOGGER.info("reading rows from file")
     with open(csv_filename, newline="") as csvfile:
         csv_reader = reader(csvfile)
         for row in csv_reader:
             LOGGER.debug(f"raw row: {row}")
+
             if not row:
                 LOGGER.debug("skipping blank row")
                 continue
+
+            if skip_rows > skipped_rows:
+                LOGGER.info(f"skipping row: {skipped_rows + 1}")
+                skipped_rows += 1
+                continue
+
             usaa_row = USAA_ROW(*row)
             LOGGER.debug(f"USAA Row: {usaa_row}")
             rows.append(usaa_row)
@@ -37,14 +45,18 @@ def _transform_usaa_to_ynab(usaa_data: List[USAA_ROW]) -> List[YNAB_ROW]:
     ynab_rows = []
     for usaa_row in usaa_data:
         LOGGER.debug(f"USAA ROW: {usaa_row}")
-        ynab_row = YNAB_ROW(
-            Date=usaa_row.date,
-            Payee=usaa_row.memo,
-            Category="",
-            Memo="",
-            Outflow="",
-            Inflow=float(usaa_row.amount.replace("--", "")),
-        )
+        try:
+            ynab_row = YNAB_ROW(
+                Date=usaa_row.Date,
+                Payee=usaa_row.Description,
+                Category="",
+                Memo="",
+                Outflow="",
+                Inflow=float(usaa_row.Amount.replace("--", "")),
+            )
+        except Exception as e:
+            LOGGER.error(f"Error '{e}' when parsing USAA ROW: [{usaa_row}]")
+            raise e
         LOGGER.debug(f"YNAB ROW: {ynab_row}")
         ynab_rows.append(ynab_row)
 
@@ -75,7 +87,7 @@ def main(input_filename: str, output_filename: str) -> None:
     :param output_filename: The YNAB formatted file to write out
     """
     LOGGER.info(f"processing file: {input_filename}")
-    usaa_data = _read_file(input_filename)
+    usaa_data = _read_file(input_filename, 1)
     ynab_data = _transform_usaa_to_ynab(usaa_data)
     output_filename = _write_ynab_file_out(ynab_data, file_path=output_filename)
     _open_ynab_for_import(output_filename)
@@ -87,3 +99,4 @@ if __name__ == "__main__":
 
     LOGGER.debug("running from __main__")
     main("./sample.csv", "./output.csv")
+
