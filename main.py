@@ -1,6 +1,13 @@
 from typing import List
 from csv import reader, writer
 from collections import namedtuple
+from csv2ofx import utils
+from csv2ofx.ofx import OFX
+from csv2ofx.mappings.default import mapping
+from operator import itemgetter
+import itertools as it
+from meza.io import read_csv, IterStringIO
+
 import logging
 LOGGER = logging.getLogger(__name__)
 
@@ -12,6 +19,15 @@ YNAB_ROW_FIELDS = [
 ]
 USAA_ROW = namedtuple('USAA_ROW', USAA_ROW_FIELDS)
 YNAB_ROW = namedtuple('YNAB_ROW', YNAB_ROW_FIELDS)
+
+USAA_MAPPING = {
+    'bank': 'USAA',
+    'account': 'Joint Checking',
+    'date': itemgetter('Date'),
+    'amount': itemgetter('Amount'),
+    'payee': itemgetter('Description'),
+    'notes': itemgetter('Memo')
+}
 
 def _read_file(csv_filename: str, skip_rows: int = 0) -> List[USAA_ROW]:
     """Reads the rows of the CSV file and returns a list of those rows"""
@@ -63,6 +79,23 @@ def _transform_usaa_to_ynab(usaa_data: List[USAA_ROW]) -> List[YNAB_ROW]:
     LOGGER.info(f"Transformed {len(ynab_rows)} rows")
     return ynab_rows
 
+def _transform_ynab_csv_to_ofx(ynab_csv_filename: str):
+    LOGGER.info("Transforming YNAB CSV to QFX")
+    ofx = OFX(USAA_MAPPING)
+    records = read_csv(ynab_csv_filename, has_header=True)
+    # records = [dict(yd) for yd in ynab_data]
+    #records = [yd._asdict for yd in ynab_data]
+    LOGGER.debug(f"YNAB csv as QFX records: {records}")
+    groups = ofx.gen_groups(records)
+    trxns = ofx.gen_trxns(groups)
+    cleaned_trxns = ofx.clean_trxns(trxns)
+    data = utils.gen_data(cleaned_trxns)
+    content = it.chain([ofx.header(), ofx.gen_body(data), ofx.footer()])
+    output = ""
+    for line in IterStringIO(content):
+        print(line.decode("utf-8"))
+        output += line.decode("utf-8")
+    return output
 
 def _write_ynab_file_out(ynab_data: List[YNAB_ROW], file_path: str) -> str:
     """Writes the file to a temp location and returns the filename"""
@@ -77,6 +110,10 @@ def _write_ynab_file_out(ynab_data: List[YNAB_ROW], file_path: str) -> str:
 
     return temp_file
 
+def _write_ofx_file(ofx_data, file_name: str):
+    with open(file_name, 'w') as f:
+        f.write(ofx_data)
+
 def _open_ynab_for_import(file_path: str) -> None:
     pass
 
@@ -90,6 +127,10 @@ def main(input_filename: str, output_filename: str) -> None:
     usaa_data = _read_file(input_filename, 1)
     ynab_data = _transform_usaa_to_ynab(usaa_data)
     output_filename = _write_ynab_file_out(ynab_data, file_path=output_filename)
+
+    ofx_data = _transform_ynab_csv_to_ofx(input_filename)
+    _write_ofx_file(ofx_data, "output.ofx")
+
     _open_ynab_for_import(output_filename)
 
 

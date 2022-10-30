@@ -16,7 +16,7 @@ pip install -f requirements.txt
 ```
 
 ## Usage
-The script is currently hard coded to look for `./sample.csv` as the input and `./output.csv` as the output.
+The script is currently hard coded to look for `./sample.csv` as the input and `./output.csv` as the output.  It will also produce a `./output.ofx` file.
 
 ```bash
 $> ls
@@ -28,6 +28,7 @@ $> python main.py
 $> ls
 sample.csv
 output.csv
+output.ofx
 main.py
 ```
 
